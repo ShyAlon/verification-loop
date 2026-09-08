@@ -23,10 +23,16 @@ Judge only what the evidence supports. 'uncertain' is a legitimate answer - it r
 
 def judge_residue(requirement: Requirement, evidence: list[str], chat_model) -> tuple[bool | None, list[dict]]:
     acs = "\n".join(f"- {a.criterion_id}: {a.statement}" for a in requirement.acceptance)
-    resp = chat_model.invoke(JUDGE_PROMPT.format(
+    from .errors import translate_json_error
+    from .model_config import invoke_checked
+
+    resp = invoke_checked(chat_model, JUDGE_PROMPT.format(
         req=f"{requirement.requirement_id} {requirement.title}: {requirement.statement}",
         acs=acs, evidence="\n".join(evidence) or "(none)",
-    ))
-    data = json.loads(resp.content.strip().strip("`").removeprefix("json").strip())
-    sat = data["satisfied"]
+    ), "residue_judge")
+    try:
+        data = json.loads(resp.content.strip().strip("`").removeprefix("json").strip())
+        sat = data["satisfied"]
+    except (json.JSONDecodeError, KeyError) as e:
+        raise translate_json_error(e, "residue_judge") from e
     return (True if sat is True else False if sat is False else None), data.get("divergences", [])
