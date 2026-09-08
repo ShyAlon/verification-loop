@@ -1,6 +1,6 @@
 from vmodel_contracts import (
     AcceptanceCriterion, AcceptanceTest, Divergence, DivergenceKind, Priority,
-    Requirement, RequirementSet, TestResult, VModelLevel,
+    Requirement, RequirementKind, RequirementSet, TestResult, VModelLevel,
 )
 from verification_loop.diff_scoring import score_delta
 from verification_loop.embeddings_trace import CodeSymbol, cosine, traceability_map
@@ -11,10 +11,10 @@ from verification_loop.report import assemble_report
 def _reqs():
     return RequirementSet(session_id="s", requirements=[
         Requirement(requirement_id="R-1", title="Booking", statement="Users book lessons",
-                    priority=Priority.MUST, need_ids=["N-1"], intent_fields=["in_scope"],
+                    priority=Priority.MUST, kind=RequirementKind.FUNCTIONAL, need_ids=["N-1"], intent_fields=["in_scope"],
                     acceptance=[AcceptanceCriterion(criterion_id="AC-1", statement="POST /bookings -> 201")]),
         Requirement(requirement_id="R-2", title="Cancel", statement="Users cancel lessons",
-                    priority=Priority.MUST, need_ids=["N-1"], intent_fields=["in_scope"],
+                    priority=Priority.MUST, kind=RequirementKind.FUNCTIONAL, need_ids=["N-1"], intent_fields=["in_scope"],
                     acceptance=[AcceptanceCriterion(criterion_id="AC-2", statement="DELETE /bookings/id -> 204")]),
     ])
 
