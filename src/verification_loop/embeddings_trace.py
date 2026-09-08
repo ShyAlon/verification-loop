@@ -57,14 +57,31 @@ def openai_embed(api_key: str, model: str = "text-embedding-3-small"):
     """Production embedding fn. $0.02/MTok; log usage in delivery-api."""
     import httpx
 
+    from .errors import UserFacingError
+
     def _embed(texts: list[str]) -> list[list[float]]:
-        resp = httpx.post(
-            "https://api.openai.com/v1/embeddings",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"model": model, "input": texts},
-            timeout=60,
-        )
-        resp.raise_for_status()
+        try:
+            resp = httpx.post(
+                "https://api.openai.com/v1/embeddings",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": model, "input": texts},
+                timeout=60,
+            )
+            resp.raise_for_status()
+        except httpx.ConnectError as e:
+            raise UserFacingError(
+                "could not reach api.openai.com for embeddings.",
+                "network problem or OpenAI outage.",
+                "check connectivity / status.openai.com, then retry - or use ollama_embed for a fully offline loop.",
+            ) from e
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                raise UserFacingError(
+                    "OpenAI rejected the embeddings request (401).",
+                    "the OPENAI_API_KEY passed to openai_embed is missing or invalid.",
+                    "export a valid OPENAI_API_KEY and retry.",
+                ) from e
+            raise
         data = resp.json()
         return [d["embedding"] for d in sorted(data["data"], key=lambda d: d["index"])]
 
@@ -79,9 +96,26 @@ def ollama_embed(model: str = "nomic-embed-text", base_url: str = "http://localh
     text-embedding-3-small for nuance, fine for dev-loop traceability."""
     import httpx
 
+    from .errors import UserFacingError
+
     def _embed(texts: list[str]) -> list[list[float]]:
-        resp = httpx.post(f"{base_url}/api/embed", json={"model": model, "input": texts}, timeout=120)
-        resp.raise_for_status()
+        try:
+            resp = httpx.post(f"{base_url}/api/embed", json={"model": model, "input": texts}, timeout=120)
+            resp.raise_for_status()
+        except httpx.ConnectError as e:
+            raise UserFacingError(
+                f"could not reach the local Ollama server at {base_url}.",
+                "Ollama is not running (or the base_url is wrong).",
+                "run `ollama serve` (or start the Ollama app) and retry.",
+            ) from e
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise UserFacingError(
+                    f"Ollama does not have embedding model '{model}'.",
+                    "the model was never pulled on this machine.",
+                    f"run `ollama pull {model}` and retry.",
+                ) from e
+            raise
         return resp.json()["embeddings"]
 
     return _embed
