@@ -40,8 +40,36 @@ def for_stage(stage: str) -> StageModel:
     return cfg
 
 
+def _preflight(cfg: "StageModel", stage: str) -> None:
+    from .errors import UserFacingError
+
+    env = _API_KEY_ENV.get(cfg.provider)
+    if env and not os.environ.get(env):
+        raise UserFacingError(
+            f"stage '{stage}' is routed to provider '{cfg.provider}' (model {cfg.model}), but {env} is not set.",
+            "no API key in the environment.",
+            f"export {env}=... or run this stage offline via Ollama: "
+            f"VERIFICATION_LOOP_MODEL_{stage.upper()}=ollama:qwen2.5-coder:7b (note: a local judge is fine "
+            "for development; founder-facing verdicts should come from the strong model).",
+        )
+
+
+def invoke_checked(chat_model, messages, stage: str = "residue_judge"):
+    from .errors import translate_llm_error
+
+    cfg = for_stage(stage)
+    try:
+        return chat_model.invoke(messages)
+    except Exception as e:  # noqa: BLE001
+        friendly = translate_llm_error(e, stage, cfg.provider, cfg.model, _BASE_URLS.get(cfg.provider))
+        if friendly is not None:
+            raise friendly from e
+        raise
+
+
 def build_chat_model(stage: str = "residue_judge"):
     cfg = for_stage(stage)
+    _preflight(cfg, stage)
     if cfg.provider in ("deepseek", "openai", "ollama"):
         from langchain_openai import ChatOpenAI
 
