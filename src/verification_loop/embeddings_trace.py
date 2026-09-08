@@ -74,6 +74,19 @@ def openai_embed(api_key: str, model: str = "text-embedding-3-small"):
 _JS_SYMBOL = re.compile(r"(?:export\s+)?(?:async\s+)?function\s+(\w+)|(?:const|let)\s+(\w+)\s*=\s*(?:async\s*)?\(")
 
 
+def ollama_embed(model: str = "nomic-embed-text", base_url: str = "http://localhost:11434"):
+    """Local embeddings via Ollama: fully offline, $0. Quality is below
+    text-embedding-3-small for nuance, fine for dev-loop traceability."""
+    import httpx
+
+    def _embed(texts: list[str]) -> list[list[float]]:
+        resp = httpx.post(f"{base_url}/api/embed", json={"model": model, "input": texts}, timeout=120)
+        resp.raise_for_status()
+        return resp.json()["embeddings"]
+
+    return _embed
+
+
 def extract_symbols_python(source: str, path: str) -> list[CodeSymbol]:
     """AST-based symbol extraction (Python). JS/TS uses the regex fast path
     below until tree-sitter lands - honest skeleton, named extension point."""
