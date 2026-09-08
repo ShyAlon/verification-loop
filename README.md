@@ -30,3 +30,17 @@ post-demo investment, and it is a security project, not a feature.
 Consumes `SpecBundle` + `AcceptanceTest` set + a build artifact reference
 (repo, archive, or deployed URL). Emits `VerificationReport`. No sibling
 imports.
+
+## Local runs with Ollama (offline, $0)
+
+The semantic-residue judge and the embeddings both have a local option:
+
+```bash
+ollama pull qwen2.5-coder:14b nomic-embed-text
+export VERIFICATION_LOOP_MODEL_RESIDUE_JUDGE=ollama:qwen2.5-coder:14b
+# embeddings_trace.ollama_embed() instead of openai_embed()
+```
+
+Deterministic stages (runner scoring, Semgrep, schema checks, diff) need no
+model at all. Founder-facing verdicts should come from the strong judge -
+the verdicts are the product.
