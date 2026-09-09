@@ -35,8 +35,7 @@ imports.
 
 The semantic-residue judge and the embeddings both have a local option:
 
-Model size: `qwen2.5-coder:14b` is the standing default (proven on a 16GB M4); `qwen2.5-coder:7b` is the lighter fallback. Both run fine on
-a 16GB machine. `qwen2.5-coder:14b` is better but wants 32GB+ RAM. Set
+Model size: `qwen2.5-coder:14b` is the standing default (proven on a 16GB M4); `qwen2.5-coder:7b` is the lighter fallback for tighter machines. Set
 `OLLAMA_NUM_PARALLEL=1` so Ollama never loads two models at once (the chat
 model plus `nomic-embed-text` would otherwise compete for RAM).
 
