@@ -23,6 +23,7 @@ def test_preflight_names_missing_remote_key(monkeypatch):
     from verification_loop.model_config import build_chat_model
 
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setenv("VERIFICATION_LOOP_MODEL_RESIDUE_JUDGE", "deepseek:deepseek-chat")  # remote is opt-in
     with pytest.raises(UserFacingError) as ei:
         build_chat_model("residue_judge")
     assert "DEEPSEEK_API_KEY" in ei.value.render()

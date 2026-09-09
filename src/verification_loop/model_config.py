@@ -1,5 +1,5 @@
 """Model routing for the ONE LLM call in verification: the semantic-residue
-judge. Providers: deepseek (default), openai, anthropic, ollama (local, $0 -
+judge. Providers: ollama (DEFAULT - local-first, ADR-0018), deepseek/openai/anthropic (opt-in),
 a local judge is fine for development; verdicts shown to founders should come
 from the strong model, the verdicts ARE the product).
 """
@@ -18,7 +18,7 @@ class StageModel:
 
 
 _STAGE_DEFAULTS: dict[str, StageModel] = {
-    "residue_judge": StageModel("deepseek", "deepseek-chat"),
+    "residue_judge": StageModel("ollama", "qwen2.5-coder:7b"),
 }
 
 _BASE_URLS = {
