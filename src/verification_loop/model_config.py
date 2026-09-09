@@ -8,6 +8,29 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+_DOTENV: dict[str, str] | None = None
+
+
+def _dotenv() -> dict[str, str]:
+    """Repo-local .env (written by vmodel-spec-app/scripts/switch-model.sh),
+    parsed once per process. Real environment variables always win over the
+    file, and os.environ is never mutated - no dependency, no side effects."""
+    global _DOTENV
+    if _DOTENV is not None:
+        return _DOTENV
+    _DOTENV = {}
+    from pathlib import Path
+
+    p = Path(".env")
+    if p.is_file():
+        for line in p.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            _DOTENV[key.strip()] = value.strip().strip('"').strip("'")
+    return _DOTENV
+
 
 @dataclass(frozen=True)
 class StageModel:
@@ -33,7 +56,7 @@ def for_stage(stage: str) -> StageModel:
     if stage not in _STAGE_DEFAULTS:
         raise KeyError(f"unknown stage {stage!r}")
     cfg = _STAGE_DEFAULTS[stage]
-    override = os.environ.get(f"VERIFICATION_LOOP_MODEL_{stage.upper()}")
+    override = os.environ.get(f"VERIFICATION_LOOP_MODEL_{stage.upper()}") or _dotenv().get(f"VERIFICATION_LOOP_MODEL_{stage.upper()}")
     if override:
         provider, _, model = override.partition(":")
         return StageModel(provider, model, cfg.temperature, cfg.max_tokens)
@@ -83,3 +106,4 @@ def build_chat_model(stage: str = "residue_judge"):
         return ChatAnthropic(model=cfg.model, temperature=cfg.temperature, max_tokens=cfg.max_tokens,
                              api_key=os.environ.get(_API_KEY_ENV["anthropic"], ""))
     raise ValueError(cfg.provider)
+
