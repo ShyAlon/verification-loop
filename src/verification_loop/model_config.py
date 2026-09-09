@@ -18,7 +18,7 @@ class StageModel:
 
 
 _STAGE_DEFAULTS: dict[str, StageModel] = {
-    "residue_judge": StageModel("ollama", "qwen2.5-coder:7b"),
+    "residue_judge": StageModel("ollama", "qwen2.5-coder:14b"),
 }
 
 _BASE_URLS = {
@@ -49,7 +49,7 @@ def _preflight(cfg: "StageModel", stage: str) -> None:
             f"stage '{stage}' is routed to provider '{cfg.provider}' (model {cfg.model}), but {env} is not set.",
             "no API key in the environment.",
             f"export {env}=... or run this stage offline via Ollama: "
-            f"VERIFICATION_LOOP_MODEL_{stage.upper()}=ollama:qwen2.5-coder:7b (note: a local judge is fine "
+            f"VERIFICATION_LOOP_MODEL_{stage.upper()}=ollama:qwen2.5-coder:14b (note: a local judge is fine "
             "for development; founder-facing verdicts should come from the strong model).",
         )
 

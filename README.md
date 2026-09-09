@@ -35,14 +35,14 @@ imports.
 
 The semantic-residue judge and the embeddings both have a local option:
 
-Model size: `qwen2.5-coder:7b` is the default recommendation and runs fine on
+Model size: `qwen2.5-coder:14b` is the standing default (proven on a 16GB M4); `qwen2.5-coder:7b` is the lighter fallback. Both run fine on
 a 16GB machine. `qwen2.5-coder:14b` is better but wants 32GB+ RAM. Set
 `OLLAMA_NUM_PARALLEL=1` so Ollama never loads two models at once (the chat
 model plus `nomic-embed-text` would otherwise compete for RAM).
 
 ```bash
-ollama pull qwen2.5-coder:7b nomic-embed-text
-export VERIFICATION_LOOP_MODEL_RESIDUE_JUDGE=ollama:qwen2.5-coder:7b
+ollama pull qwen2.5-coder:14b nomic-embed-text
+export VERIFICATION_LOOP_MODEL_RESIDUE_JUDGE=ollama:qwen2.5-coder:14b
 # embeddings_trace.ollama_embed() instead of openai_embed()
 ```
 
