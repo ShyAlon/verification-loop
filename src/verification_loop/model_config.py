@@ -50,12 +50,53 @@ def _env(key: str) -> str | None:
 
 # ---------------------------------------------------------------- guardrails
 # Every LLM call passes through these limits. A hung ollama generation costs a
-# hang at full GPU; the same hang on a paid API is a bill. All three knobs are
+# hang at full GPU; the same hang on a paid API is a bill. All four knobs are
 # env/.env-overridable; the defaults match "demo on a 16GB laptop, or cents".
 _CALL_TIMEOUT_S = 600   # wall-clock budget per call, client retries included
 _STALL_TIMEOUT_S = 180  # a stream this quiet is hung, not thinking
 _MAX_CALLS = 200        # what ONE process run may spend, in LLM calls
 _CALLS_USED = 0
+
+
+_MAX_TOKENS_ENV = "VMODEL_LLM_MAX_TOKENS"  # per-call generation ceiling override (unset: stage default)
+
+
+def _max_tokens_limit(stage_default: int) -> int:
+    """Per-call generation-length ceiling. Each stage ships its own default
+    (StageModel.max_tokens); VMODEL_LLM_MAX_TOKENS overrides it globally - a
+    looping generation hits a length ceiling, not only a clock ceiling."""
+    raw = _env(_MAX_TOKENS_ENV)
+    try:
+        v = int(raw) if raw else stage_default
+    except ValueError:
+        v = stage_default
+    return v if v > 0 else stage_default
+
+
+def _truncation_reason(resp) -> str | None:
+    meta = getattr(resp, "response_metadata", None) or {}
+    for key in ("done_reason", "finish_reason", "stop_reason"):  # ollama / openai-compat / anthropic
+        if meta.get(key) in ("length", "max_tokens"):
+            return str(meta[key])
+    return None
+
+
+def _check_truncated(resp, stage: str, cfg) -> None:
+    """A generation cut at the token ceiling is a failure, not an answer: name
+    it here, or it surfaces downstream as a confusing parse/validation error."""
+    if _truncation_reason(resp) is None:
+        return
+    from .errors import UserFacingError
+
+    ceiling = _max_tokens_limit(cfg.max_tokens)
+    raise UserFacingError(
+        f"stage '{stage}': the {cfg.provider}/{cfg.model} call hit the generation-length "
+        f"ceiling ({ceiling} tokens) and its output was cut off.",
+        "the model had more to emit than one call allows - the payload is truncated.",
+        "rerun the same command - the checkpoint resumes at this stage. If it repeats, raise "
+        f"{_MAX_TOKENS_ENV} only deliberately, or route the stage to another provider with "
+        "vmodel-spec-app/scripts/switch-model.sh.",
+    )
 
 
 def _guard_limits() -> tuple[int, int, int]:
@@ -175,7 +216,9 @@ def invoke_checked(chat_model, messages, stage: str = "residue_judge"):
     _guard_enter(stage)
     call_timeout = _guard_limits()[0]
     try:
-        return _run_with_deadline(lambda: chat_model.invoke(messages), call_timeout, stage)
+        resp = _run_with_deadline(lambda: chat_model.invoke(messages), call_timeout, stage)
+        _check_truncated(resp, stage, cfg)
+        return resp
     except TimeoutError:
         raise _guard_killed(stage, "no completion within the call budget",
                             call_timeout, call_timeout) from None
@@ -194,14 +237,14 @@ def build_chat_model(stage: str = "residue_judge"):
 
         env = _API_KEY_ENV[cfg.provider]
         return ChatOpenAI(model=cfg.model, temperature=cfg.temperature,
-            timeout=_guard_limits()[0], max_tokens=cfg.max_tokens,
+            timeout=_guard_limits()[0], max_tokens=_max_tokens_limit(cfg.max_tokens),
                           base_url=_BASE_URLS[cfg.provider],
                           api_key=(_env(env) or "" if env else "") or "ollama")
     if cfg.provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
         return ChatAnthropic(model=cfg.model, temperature=cfg.temperature,
-            timeout=_guard_limits()[0], max_tokens=cfg.max_tokens,
+            timeout=_guard_limits()[0], max_tokens=_max_tokens_limit(cfg.max_tokens),
                              api_key=_env(_API_KEY_ENV["anthropic"]) or "")
     raise ValueError(cfg.provider)
 
