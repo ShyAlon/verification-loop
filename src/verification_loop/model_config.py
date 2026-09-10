@@ -13,17 +13,25 @@ _DOTENV: dict[str, str] | None = None
 
 
 def _dotenv() -> dict[str, str]:
-    """Repo-local .env (written by vmodel-spec-app/scripts/switch-model.sh),
-    parsed once per process. Real environment variables always win over the
-    file, and os.environ is never mutated - no dependency, no side effects."""
+    """Config files, parsed once per process, most-shared first:
+
+    1. <require-root>/.env - the SHARED config one directory up
+       (vmodel-spec-app/scripts/switch-model.sh writes there; one file drives
+       every process). Present only in the sibling-repo layout; absent in a
+       standalone checkout and nothing changes.
+    2. ./.env - repo-local overrides for the rare per-repo deviation.
+
+    Real environment variables always win over both files (see _env), and
+    os.environ is never mutated - no dependency, no side effects."""
     global _DOTENV
     if _DOTENV is not None:
         return _DOTENV
     _DOTENV = {}
     from pathlib import Path
 
-    p = Path(".env")
-    if p.is_file():
+    for p in (Path("..") / ".env", Path(".env")):
+        if not p.is_file():
+            continue
         for line in p.read_text().splitlines():
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
