@@ -20,7 +20,7 @@ class FakeModel:
 @pytest.fixture(autouse=True)
 def _clean_guard_env(monkeypatch):
     monkeypatch.setattr(mc, "_CALLS_USED", 0)
-    for v in ("VMODEL_LLM_CALL_TIMEOUT_S", "VMODEL_LLM_MAX_CALLS", "VMODEL_LLM_MAX_TOKENS", "VMODEL_LLM_LOG", "VMODEL_LLM_HEARTBEAT_S"):
+    for v in ("VMODEL_LLM_CALL_TIMEOUT_S", "VMODEL_LLM_MAX_CALLS", "VMODEL_LLM_MAX_TOKENS", "VMODEL_LLM_LOG", "VMODEL_LLM_HEARTBEAT_S", "VMODEL_OLLAMA_THINK"):
         monkeypatch.delenv(v, raising=False)
 
 
@@ -212,3 +212,15 @@ def test_heartbeat_disabled_with_zero(monkeypatch, capsys):
 def test_describe_models_names_resolved_provider_and_model():
     s = mc.describe_models()
     assert "ollama/qwen2.5-coder:14b" in s and "residue_judge=" in s
+
+
+def test_ollama_thinking_off_by_default(monkeypatch):
+    monkeypatch.delenv("VMODEL_OLLAMA_THINK", raising=False)
+    m = mc.build_chat_model("residue_judge")
+    assert m.extra_body == {"think": False}
+
+
+def test_ollama_thinking_knob_reenables(monkeypatch):
+    monkeypatch.setenv("VMODEL_OLLAMA_THINK", "1")
+    m = mc.build_chat_model("residue_judge")
+    assert not m.extra_body or "think" not in m.extra_body
