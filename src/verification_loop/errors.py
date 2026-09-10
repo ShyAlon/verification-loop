@@ -65,14 +65,52 @@ def translate_llm_error(exc: Exception, stage: str, provider: str, model: str, b
             )
         return UserFacingError(
             f"stage '{stage}': provider '{provider}' does not know model '{model}'.",
-            "typo in the model override, or the model was renamed/retired.",
-            "check the *_MODEL_* env override against the provider's model list.",
+            "typo in the model override, the model was renamed/retired, or the key's tier has "
+            "no access to this model.",
+            "check the *_MODEL_* env override against the provider's model list, and the key's "
+            "tier/model access in the provider console.",
+        )
+    if name == "PermissionDeniedError" or "error code: 403" in text:
+        from .model_config import _provider_error_detail
+
+        detail = _provider_error_detail(exc)
+        return UserFacingError(
+            f"stage '{stage}': '{provider}' denied access (403).",
+            f"the key authenticated, but this model or feature may not be enabled on its tier. "
+            f"detail: {str(detail.get('message', ''))[:200]}",
+            "check the key's tier/model access in the provider console - or route the stage to "
+            "ollama: vmodel-spec-app/scripts/switch-model.sh ollama.",
         )
     if name == "RateLimitError" or "429" in text:
+        # 429 is three different failures wearing one status: split them,
+        # because the right action for each is different (2026-09-10: a key
+        # with no quota was told to "wait a minute").
+        from .model_config import _provider_error_detail, _rerun_guidance
+
+        detail = _provider_error_detail(exc)
+        blob = " ".join(str(detail.get(k, "")) for k in ("type", "code", "message")).lower()
+        short = str(detail.get("message", ""))[:140]
+        if "insufficient_quota" in blob or "plan and billing" in blob:
+            return UserFacingError(
+                f"stage '{stage}': '{provider}' rejected the call - the key has no usable quota.",
+                f"insufficient_quota is billing/credits, not throughput - waiting changes nothing. "
+                f"provider said: {short}",
+                "add a payment method or credits in the provider console - or switch back to local: "
+                "vmodel-spec-app/scripts/switch-model.sh ollama.",
+            )
+        if "rate limit reached" in blob or "requests per" in blob or "tokens per" in blob:
+            wait = (f"the provider says retry after {detail['retry_after_s']}s. "
+                    if detail.get("retry_after_s") else "")
+            return UserFacingError(
+                f"stage '{stage}' hit '{provider}' throughput limits.",
+                f"true rate limiting - the key is sending faster than its plan allows: {short}",
+                f"{wait}{_rerun_guidance(stage)}; persistent? lower parallel load or raise the plan tier.",
+            )
         return UserFacingError(
             f"stage '{stage}' hit '{provider}' rate limits.",
-            "too many requests for the current plan/key.",
-            "wait a minute and retry; persistent? lower parallel stages or upgrade the key.",
+            f"provider detail: {short or 'unknown'}.",
+            f"{_rerun_guidance(stage)}; persistent? check the key's plan. Set VMODEL_LLM_LOG=<path> "
+            "for the full raw provider payload.",
         )
     return None
 
@@ -99,3 +137,4 @@ def run_cli(fn) -> None:
     except json.JSONDecodeError as e:
         print("\n" + translate_json_error(e, "cli").render(), file=sys.stderr)
         sys.exit(1)
+
