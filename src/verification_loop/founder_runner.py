@@ -21,9 +21,10 @@ import argparse, json, sys, urllib.request, urllib.error
 TESTS = {tests_json}
 
 def run_http(t, base):
-    d = t["definition"]
-    req = urllib.request.Request(base + d["url"], method=d.get("method", "GET"),
-                                 data=(json.dumps(d["body"]).encode() if d.get("body") else None),
+    d = t["definition"]["execution"]
+    body = json.loads(d["body_json"]) if d.get("body_json") else None
+    req = urllib.request.Request(base + d["url"], method=d.get("method") or "GET",
+                                 data=(json.dumps(body).encode() if body is not None else None),
                                  headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
@@ -32,15 +33,18 @@ def run_http(t, base):
         status = e.code
     except Exception as e:
         return {"test_id": t["test_id"], "passed": False, "evidence": f"unreachable: {e}"}
-    return {"test_id": t["test_id"], "passed": status == d.get("expect", 200),
-             "evidence": f"{d.get('method','GET')} {d['url']} -> {status} (expected {d.get('expect',200)})"}
+    expected = d.get("expected_status") if d.get("expected_status") is not None else 200
+    method = d.get("method") or "GET"
+    return {"test_id": t["test_id"], "passed": status == expected,
+             "evidence": f"{method} {d['url']} -> {status} (expected {expected})"}
 
 def run_cli(t, base):
     import subprocess
-    d = t["definition"]
+    d = t["definition"]["execution"]
     try:
         p = subprocess.run(d["command"], shell=True, capture_output=True, text=True, timeout=60)
-        ok = (p.returncode == d.get("expect_exit", 0)) and (d.get("expect_stdout", "") in p.stdout)
+        expected_exit = d.get("expected_exit") if d.get("expected_exit") is not None else 0
+        ok = (p.returncode == expected_exit) and ((d.get("expected_stdout_contains") or "") in p.stdout)
         return {"test_id": t["test_id"], "passed": ok, "evidence": p.stdout[-500:] or p.stderr[-500:]}
     except Exception as e:
         return {"test_id": t["test_id"], "passed": False, "evidence": str(e)}
@@ -70,7 +74,8 @@ if __name__ == "__main__":
 
 def generate_runner(tests: list[AcceptanceTest]) -> str:
     serializable = [
-        {"test_id": t.test_id, "runner": t.runner, "definition": t.definition,
+        {"test_id": t.test_id, "runner": t.runner,
+         "definition": t.definition.model_dump(mode="json"),
          "description": t.description}
         for t in tests if t.runner in ("http", "cli", "dom", "semantic")
     ]

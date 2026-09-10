@@ -31,7 +31,7 @@ def test_traceability_flags_orphans():
 
 def test_report_marks_failed_test_as_blocking_divergence():
     tests = [AcceptanceTest(test_id="T-1", level=VModelLevel.ACCEPTANCE, criterion_id="AC-1",
-                            description="booking works", runner="http", definition={})]
+                            description="booking works", runner="http", definition={"preconditions": [], "steps": ["run"], "expected_outcomes": ["pass"], "cleanup": [], "cases": [], "execution": {}})]
     results = [TestResult(test_id="T-1", passed=False, evidence="POST /bookings -> 500")]
     rep = assemble_report("s", "http://localhost:3000", _reqs(), tests, results,
                           {"R-1": ["app.ts:createBooking"], "R-2": []}, [], [])
@@ -51,3 +51,24 @@ def test_diff_scoring_finds_resolved_and_regressions():
 def test_cosine_sanity():
     assert cosine([1, 0], [1, 0]) > 0.99
     assert cosine([1, 0], [0, 1]) < 0.01
+
+
+
+def test_runner_serializes_canonical_test_definition():
+    from verification_loop.founder_runner import generate_runner
+
+    test = AcceptanceTest(
+        test_id="T-1", level=VModelLevel.ACCEPTANCE, criterion_id="AC-1",
+        description="booking works", runner="semantic",
+        definition={
+            "preconditions": ["service is running"],
+            "steps": ["create a booking"],
+            "expected_outcomes": ["booking is persisted"],
+            "cleanup": [],
+            "cases": [{"name": "E-1", "inputs": ["valid request"],
+                       "expected_outcomes": ["accepted"]}],
+            "execution": {"url": "/bookings", "method": "POST", "expected_status": 201},
+        },
+    )
+    runner = generate_runner([test])
+    assert '"preconditions": [' in runner and '"name": "E-1"' in runner
