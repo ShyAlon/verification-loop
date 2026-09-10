@@ -32,6 +32,13 @@ def _dotenv() -> dict[str, str]:
     return _DOTENV
 
 
+def _env(key: str) -> str | None:
+    """One setting lookup: the real environment wins, the repo-local .env
+    fills the gap. Every external config read goes through here so a .env
+    written by switch-model.sh works for API keys too, not just routing."""
+    return os.environ.get(key) or _dotenv().get(key)
+
+
 @dataclass(frozen=True)
 class StageModel:
     provider: str
@@ -56,7 +63,7 @@ def for_stage(stage: str) -> StageModel:
     if stage not in _STAGE_DEFAULTS:
         raise KeyError(f"unknown stage {stage!r}")
     cfg = _STAGE_DEFAULTS[stage]
-    override = os.environ.get(f"VERIFICATION_LOOP_MODEL_{stage.upper()}") or _dotenv().get(f"VERIFICATION_LOOP_MODEL_{stage.upper()}")
+    override = _env(f"VERIFICATION_LOOP_MODEL_{stage.upper()}")
     if override:
         provider, _, model = override.partition(":")
         return StageModel(provider, model, cfg.temperature, cfg.max_tokens)
@@ -67,7 +74,7 @@ def _preflight(cfg: "StageModel", stage: str) -> None:
     from .errors import UserFacingError
 
     env = _API_KEY_ENV.get(cfg.provider)
-    if env and not os.environ.get(env):
+    if env and not _env(env):
         raise UserFacingError(
             f"stage '{stage}' is routed to provider '{cfg.provider}' (model {cfg.model}), but {env} is not set.",
             "no API key in the environment.",
@@ -99,11 +106,11 @@ def build_chat_model(stage: str = "residue_judge"):
         env = _API_KEY_ENV[cfg.provider]
         return ChatOpenAI(model=cfg.model, temperature=cfg.temperature, max_tokens=cfg.max_tokens,
                           base_url=_BASE_URLS[cfg.provider],
-                          api_key=(os.environ.get(env, "") if env else "") or "ollama")
+                          api_key=(_env(env) or "" if env else "") or "ollama")
     if cfg.provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
         return ChatAnthropic(model=cfg.model, temperature=cfg.temperature, max_tokens=cfg.max_tokens,
-                             api_key=os.environ.get(_API_KEY_ENV["anthropic"], ""))
+                             api_key=_env(_API_KEY_ENV["anthropic"]) or "")
     raise ValueError(cfg.provider)
 
