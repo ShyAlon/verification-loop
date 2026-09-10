@@ -370,6 +370,15 @@ def invoke_checked(chat_model, messages, stage: str = "residue_judge", item: str
         stop_heartbeat()
 
 
+def _ollama_keep_alive() -> str:
+    """Pin the model between calls: VMODEL_OLLAMA_KEEP_ALIVE, default 30m.
+    Without it the idle timer (5m default) can unload the model out from
+    under a long in-flight request - and a model stuck 'Stopping...' hangs
+    the client until the wall-clock budget (ollama#14364/#12179/#8178;
+    2026-09-10: T-1 hung 6+ minutes while `ollama ps` showed 'Stopping...')."""
+    return _env("VMODEL_OLLAMA_KEEP_ALIVE") or "30m"
+
+
 def _ollama_num_ctx() -> int:
     """Explicit context window for ollama calls, default 32768. Ollama's
     server default is 4096 and it silently TRUNCATES prompts past that
@@ -403,7 +412,8 @@ def build_chat_model(stage: str = "residue_judge"):
         env = _API_KEY_ENV[cfg.provider]
         extra = {}
         if cfg.provider == "ollama":
-            body = {"num_ctx": _ollama_num_ctx()}  # honored once ollama PR #16825 lands
+            body = {"num_ctx": _ollama_num_ctx(),  # honored once ollama PR #16825 lands
+                    "keep_alive": _ollama_keep_alive()}
             if not _ollama_think():
                 body["think"] = False
             extra = {"extra_body": body}

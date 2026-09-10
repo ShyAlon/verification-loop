@@ -20,7 +20,7 @@ class FakeModel:
 @pytest.fixture(autouse=True)
 def _clean_guard_env(monkeypatch):
     monkeypatch.setattr(mc, "_CALLS_USED", 0)
-    for v in ("VMODEL_LLM_CALL_TIMEOUT_S", "VMODEL_LLM_MAX_CALLS", "VMODEL_LLM_MAX_TOKENS", "VMODEL_LLM_LOG", "VMODEL_LLM_HEARTBEAT_S", "VMODEL_OLLAMA_THINK", "VMODEL_OLLAMA_NUM_CTX"):
+    for v in ("VMODEL_LLM_CALL_TIMEOUT_S", "VMODEL_LLM_MAX_CALLS", "VMODEL_LLM_MAX_TOKENS", "VMODEL_LLM_LOG", "VMODEL_LLM_HEARTBEAT_S", "VMODEL_OLLAMA_THINK", "VMODEL_OLLAMA_NUM_CTX", "VMODEL_OLLAMA_KEEP_ALIVE"):
         monkeypatch.delenv(v, raising=False)
 
 
@@ -233,3 +233,12 @@ def test_ollama_num_ctx_default_and_knob(monkeypatch):
     monkeypatch.setenv("VMODEL_OLLAMA_NUM_CTX", "16384")
     m = mc.build_chat_model("residue_judge")
     assert m.extra_body["num_ctx"] == 16384
+
+
+def test_ollama_keep_alive_pinned(monkeypatch):
+    monkeypatch.delenv("VMODEL_OLLAMA_KEEP_ALIVE", raising=False)
+    m = mc.build_chat_model("residue_judge")
+    assert m.extra_body["keep_alive"] == "30m"
+    monkeypatch.setenv("VMODEL_OLLAMA_KEEP_ALIVE", "1h")
+    m = mc.build_chat_model("residue_judge")
+    assert m.extra_body["keep_alive"] == "1h"
