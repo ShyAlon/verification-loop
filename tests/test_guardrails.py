@@ -20,7 +20,7 @@ class FakeModel:
 @pytest.fixture(autouse=True)
 def _clean_guard_env(monkeypatch):
     monkeypatch.setattr(mc, "_CALLS_USED", 0)
-    for v in ("VMODEL_LLM_CALL_TIMEOUT_S", "VMODEL_LLM_MAX_CALLS", "VMODEL_LLM_MAX_TOKENS", "VMODEL_LLM_LOG", "VMODEL_LLM_HEARTBEAT_S", "VMODEL_OLLAMA_THINK"):
+    for v in ("VMODEL_LLM_CALL_TIMEOUT_S", "VMODEL_LLM_MAX_CALLS", "VMODEL_LLM_MAX_TOKENS", "VMODEL_LLM_LOG", "VMODEL_LLM_HEARTBEAT_S", "VMODEL_OLLAMA_THINK", "VMODEL_OLLAMA_NUM_CTX"):
         monkeypatch.delenv(v, raising=False)
 
 
@@ -217,10 +217,19 @@ def test_describe_models_names_resolved_provider_and_model():
 def test_ollama_thinking_off_by_default(monkeypatch):
     monkeypatch.delenv("VMODEL_OLLAMA_THINK", raising=False)
     m = mc.build_chat_model("residue_judge")
-    assert m.extra_body == {"think": False}
+    assert m.extra_body["think"] is False
 
 
 def test_ollama_thinking_knob_reenables(monkeypatch):
     monkeypatch.setenv("VMODEL_OLLAMA_THINK", "1")
     m = mc.build_chat_model("residue_judge")
     assert not m.extra_body or "think" not in m.extra_body
+
+
+def test_ollama_num_ctx_default_and_knob(monkeypatch):
+    monkeypatch.delenv("VMODEL_OLLAMA_NUM_CTX", raising=False)
+    m = mc.build_chat_model("residue_judge")
+    assert m.extra_body["num_ctx"] == 32768
+    monkeypatch.setenv("VMODEL_OLLAMA_NUM_CTX", "16384")
+    m = mc.build_chat_model("residue_judge")
+    assert m.extra_body["num_ctx"] == 16384

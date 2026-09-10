@@ -370,6 +370,22 @@ def invoke_checked(chat_model, messages, stage: str = "residue_judge", item: str
         stop_heartbeat()
 
 
+def _ollama_num_ctx() -> int:
+    """Explicit context window for ollama calls, default 32768. Ollama's
+    server default is 4096 and it silently TRUNCATES prompts past that
+    (2026-09-10: `ollama ps` showed CONTEXT 4096 while stage prompts run
+    larger - the model never saw whole requirements, which surfaced as
+    contract failures/retries). Override with VMODEL_OLLAMA_NUM_CTX.
+    Note: the native /api/chat path honors this per request; the
+    OpenAI-compat endpoint only forwards num_ctx once ollama PR #16825
+    lands - until then the server-side lever for that path is
+    OLLAMA_CONTEXT_LENGTH=32768 on `ollama serve`."""
+    try:
+        return int(_env("VMODEL_OLLAMA_NUM_CTX") or "32768")
+    except ValueError:
+        return 32768
+
+
 def _ollama_think() -> bool:
     """qwen3-class ollama models think by default - minutes of silent <think>
     before any output, dead time for structured generation (2026-09-10: a
@@ -385,11 +401,16 @@ def build_chat_model(stage: str = "residue_judge"):
         from langchain_openai import ChatOpenAI
 
         env = _API_KEY_ENV[cfg.provider]
-        think = {"extra_body": {"think": False}} if cfg.provider == "ollama" and not _ollama_think() else {}
+        extra = {}
+        if cfg.provider == "ollama":
+            body = {"num_ctx": _ollama_num_ctx()}  # honored once ollama PR #16825 lands
+            if not _ollama_think():
+                body["think"] = False
+            extra = {"extra_body": body}
         return ChatOpenAI(model=cfg.model, temperature=cfg.temperature,
             timeout=_guard_limits()[0], max_tokens=_max_tokens_limit(cfg.max_tokens),
                           base_url=_BASE_URLS[cfg.provider],
-                          api_key=(_env(env) or "" if env else "") or "ollama", **think)
+                          api_key=(_env(env) or "" if env else "") or "ollama", **extra)
     if cfg.provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
