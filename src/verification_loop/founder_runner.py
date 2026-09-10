@@ -46,6 +46,8 @@ def run_cli(t, base):
         return {"test_id": t["test_id"], "passed": False, "evidence": str(e)}
 
 def main():
+    from . import model_config as _mc
+    print(f"Models: {_mc.describe_models()}")
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-url", default="http://localhost:3000")
     args = ap.parse_args()
@@ -73,3 +75,4 @@ def generate_runner(tests: list[AcceptanceTest]) -> str:
         for t in tests if t.runner in ("http", "cli", "dom", "semantic")
     ]
     return RUNNER_TEMPLATE.replace("{tests_json}", json.dumps(serializable, indent=2))
+

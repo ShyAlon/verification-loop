@@ -9,6 +9,7 @@ import json
 import os
 import re as _re
 import sys
+import threading
 import time
 from dataclasses import dataclass
 
@@ -138,12 +139,52 @@ def _log_llm(event: dict) -> None:
     line = json.dumps({**event, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}, default=str)
     try:
         if sink == "stderr":
-            print(line, file=sys.stderr)
+            _console_line(line)
         else:
             with open(sink, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
     except OSError:
         pass
+
+
+_CONSOLE_LOCK = threading.Lock()
+
+
+def _console_line(msg: str) -> None:
+    """One stderr line, atomically - the heartbeat thread and the progress
+    printer share this lock so lines never interleave mid-call."""
+    with _CONSOLE_LOCK:
+        sys.stderr.write(msg + "\n")
+        sys.stderr.flush()
+
+
+def _heartbeat_interval() -> float:
+    """VMODEL_LLM_HEARTBEAT_S: seconds between 'still working' lines while a
+    call runs without producing output. Default 30; 0 disables."""
+    try:
+        return float(_env("VMODEL_LLM_HEARTBEAT_S") or "30")
+    except ValueError:
+        return 30.0
+
+
+def _start_heartbeat(label: str):
+    """Print '  ... still working - <label>, Ns elapsed' every
+    VMODEL_LLM_HEARTBEAT_S seconds until the returned stop() is called.
+    Daemon thread; zero threads when disabled."""
+    interval = _heartbeat_interval()
+    if interval <= 0:
+        return lambda: None
+    t0 = time.monotonic()
+    stop = threading.Event()
+
+    def _beat() -> None:
+        while not stop.wait(interval):
+            if stop.is_set():  # a beat already past the wait must not print after the call returned
+                break
+            _console_line(f"  ... still working - {label}, {time.monotonic() - t0:.0f}s elapsed")
+
+    threading.Thread(target=_beat, daemon=True).start()
+    return stop.set
 
 
 def _provider_error_detail(exc) -> dict:
@@ -284,6 +325,12 @@ def _preflight(cfg: "StageModel", stage: str) -> None:
         )
 
 
+def describe_models() -> str:
+    """What will actually run, resolved per stage after env/.env layering -
+    printed at startup so the log always records which provider/model ran."""
+    return ", ".join(f"{s}={for_stage(s).provider}/{for_stage(s).model}" for s in _STAGE_DEFAULTS)
+
+
 def invoke_checked(chat_model, messages, stage: str = "residue_judge", item: str | None = None):
     """chat_model.invoke under the guardrails (budget + deadline), with the
     known pains translated to human language. Every call is logged when
@@ -297,6 +344,7 @@ def invoke_checked(chat_model, messages, stage: str = "residue_judge", item: str
     base = {"provider": cfg.provider, "model": cfg.model, "stage": stage,
             **({"item": item} if item else {})}
     _log_llm({"event": "llm_call_start", **base})
+    stop_heartbeat = _start_heartbeat(f"stage '{stage}'" + (f" [{item}]" if item else "") + " call")
     t0 = time.monotonic()
     try:
         resp = _run_with_deadline(lambda: chat_model.invoke(messages), call_timeout, stage)
@@ -318,6 +366,8 @@ def invoke_checked(chat_model, messages, stage: str = "residue_judge", item: str
         if friendly is not None:
             raise friendly from e
         raise
+    finally:
+        stop_heartbeat()
 
 
 def build_chat_model(stage: str = "residue_judge"):
