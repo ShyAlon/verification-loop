@@ -11,7 +11,7 @@ license = { text = "Proprietary" }
 authors = [{ name = "Shy Alon" }]
 dynamic = ["version"]
 dependencies = [
-  "vmodel-contracts @ git+https://github.com/ShyAlon/vmodel-contracts.git@v0.10.0",
+  "vmodel-contracts @ git+https://github.com/ShyAlon/vmodel-contracts.git@v0.11.0",
   "pydantic>=2.6,<3",
   "httpx>=0.27",
 ]
@@ -28,4 +28,5 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/verification_loop"]
+
 

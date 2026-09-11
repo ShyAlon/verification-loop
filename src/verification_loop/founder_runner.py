@@ -18,6 +18,12 @@ RUNNER_TEMPLATE = '''#!/usr/bin/env python3
 Emits results.json next to itself. Stdlib only, no installs."""
 import argparse, json, sys, urllib.request, urllib.error
 
+try:
+    from vmodel_contracts import run_with_system_awake
+except ImportError:  # exported runner stays runnable with the standard library alone
+    def run_with_system_awake(fn):
+        return fn()
+
 TESTS = {tests_json}
 
 def run_http(t, base):
@@ -68,7 +74,7 @@ def main():
     print(f"{sum(1 for r in results if r['passed'])}/{len(results)} passed -> results.json")
 
 if __name__ == "__main__":
-    main()
+    run_with_system_awake(main)
 '''
 
 
@@ -80,4 +86,5 @@ def generate_runner(tests: list[AcceptanceTest]) -> str:
         for t in tests if t.runner in ("http", "cli", "dom", "semantic")
     ]
     return RUNNER_TEMPLATE.replace("{tests_json}", json.dumps(serializable, indent=2))
+
 

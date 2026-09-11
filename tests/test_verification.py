@@ -72,3 +72,12 @@ def test_runner_serializes_canonical_test_definition():
     )
     runner = generate_runner([test])
     assert '"preconditions": [' in runner and '"name": "E-1"' in runner
+
+
+
+def test_generated_runner_uses_shared_keep_awake_with_stdlib_fallback():
+    from verification_loop.founder_runner import generate_runner
+    source = generate_runner([])
+    assert "from vmodel_contracts import run_with_system_awake" in source
+    assert "run_with_system_awake(main)" in source
+    assert "except ImportError" in source
