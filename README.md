@@ -48,3 +48,7 @@ export VERIFICATION_LOOP_MODEL_RESIDUE_JUDGE=ollama:qwen2.5-coder:14b
 Deterministic stages (runner scoring, Semgrep, schema checks, diff) need no
 model at all. Founder-facing verdicts should come from the strong judge -
 the verdicts are the product.
+
+### Local CI test
+
+Run `./scripts/test-local.sh` from any directory. It creates a reusable `.venv`, installs the development dependencies and runs the same tests as the PR workflow using Python 3.12. Install Python 3.12 first, and make sure your Git authentication can read private `ShyAlon/vmodel-contracts` where it is a dependency.
