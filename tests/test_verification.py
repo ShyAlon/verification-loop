@@ -31,7 +31,7 @@ def test_traceability_flags_orphans():
 
 def test_report_marks_failed_test_as_blocking_divergence():
     tests = [AcceptanceTest(test_id="T-1", level=VModelLevel.ACCEPTANCE, criterion_id="AC-1",
-                            description="booking works", runner="http", definition={"preconditions": [], "steps": ["run"], "expected_outcomes": ["pass"], "cleanup": [], "cases": [], "execution": {}})]
+                            components=["booking-service"], description="booking works", runner="http", definition={"preconditions": [], "steps": ["run"], "expected_outcomes": ["pass"], "cleanup": [], "cases": [], "execution": {}})]
     results = [TestResult(test_id="T-1", passed=False, evidence="POST /bookings -> 500")]
     rep = assemble_report("s", "http://localhost:3000", _reqs(), tests, results,
                           {"R-1": ["app.ts:createBooking"], "R-2": []}, [], [])
@@ -59,7 +59,7 @@ def test_runner_serializes_canonical_test_definition():
 
     test = AcceptanceTest(
         test_id="T-1", level=VModelLevel.ACCEPTANCE, criterion_id="AC-1",
-        description="booking works", runner="semantic",
+        components=["booking-service"], description="booking works", runner="semantic",
         definition={
             "preconditions": ["service is running"],
             "steps": ["create a booking"],
